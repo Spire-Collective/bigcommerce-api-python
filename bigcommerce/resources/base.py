@@ -161,6 +161,46 @@ class ListableApiSubResource(ApiSubResource):
     def all(cls, parentid=None, connection=None, **params):
         response = cls._make_request('GET', cls._get_all_path(parentid), connection, params=params)
         return cls._create_object(response, connection=connection)
+    
+    @classmethod
+    def iterall(cls, parentid=None, connection=None, **kwargs):
+        """
+            Returns a autopaging generator that yields each object returned one by one.
+        """
+
+        try:
+            limit = kwargs['limit']
+        except KeyError:
+            limit = None
+
+        try:
+            page = kwargs['page']
+        except KeyError:
+            page = None
+
+        def _all_responses():
+            page = 1  # one based
+            params = kwargs.copy()
+
+            while True:
+                params.update(page=page, limit=250)
+                rsp = cls._make_request('GET', cls._get_all_path(parentid), connection, params=params)
+                if rsp:
+                    yield rsp
+                    page += 1
+                else:
+                    yield []  # needed for case where there is no objects
+                    break
+
+        if not (limit or page):
+            for rsp in _all_responses():
+                for obj in rsp:
+                    yield cls._create_object(obj, connection=connection)
+
+        else:
+            response = cls._make_request('GET', cls._get_all_path(), connection, params=kwargs)
+            for obj in cls._create_object(response, connection=connection):
+                yield obj
 
 
 class UpdateableApiResource(ApiResource):
